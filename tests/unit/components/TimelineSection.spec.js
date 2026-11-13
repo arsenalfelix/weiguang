@@ -45,10 +45,48 @@ describe("TimelineSection", () => {
     });
 
     await wrapper.find(".like-btn").trigger("click");
+    await wrapper.find(".bookmark-btn").trigger("click");
     await wrapper.find(".edit-btn").trigger("click");
 
     expect(wrapper.emitted("like")?.[0]).toEqual(["p1"]);
+    expect(wrapper.emitted("bookmark")?.[0]).toEqual(["p1"]);
     expect(wrapper.emitted("edit")?.[0]).toEqual(["p1"]);
+  });
+
+  it("渲染全部 / 点赞 / 收藏三个筛选标签及计数", () => {
+    const wrapper = mount(TimelineSection, {
+      props: {
+        posts: [makePost("p1", "第一条")],
+        filter: "all",
+        counts: { all: 3, liked: 2, bookmarked: 1 },
+      },
+    });
+
+    const tabs = wrapper.findAll(".filter-tab");
+    expect(tabs).toHaveLength(3);
+    expect(tabs.map((tab) => tab.find("span").text())).toEqual(["全部", "点赞", "收藏"]);
+    expect(tabs.map((tab) => tab.find(".filter-count").text())).toEqual(["3", "2", "1"]);
+    expect(tabs[0].classes()).toContain("is-active");
+    expect(tabs[0].attributes("aria-selected")).toBe("true");
+  });
+
+  it("点击筛选标签抛出 filter 事件", async () => {
+    const wrapper = mount(TimelineSection, {
+      props: { posts: [makePost("p1", "第一条")], filter: "all" },
+    });
+
+    await wrapper.find('[data-filter="bookmarked"]').trigger("click");
+
+    expect(wrapper.emitted("filter")?.[0]).toEqual(["bookmarked"]);
+  });
+
+  it("切换筛选视图时使用对应的空状态文案", () => {
+    const wrapper = mount(TimelineSection, {
+      props: { posts: [], filter: "bookmarked" },
+    });
+
+    expect(wrapper.find(".empty-title").text()).toBe("还没有收藏的动态");
+    expect(wrapper.find(".section-divider span").text()).toBe("我的收藏");
   });
 
   it("把编辑态与高亮态传给对应卡片", () => {

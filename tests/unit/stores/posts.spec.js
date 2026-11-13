@@ -13,6 +13,8 @@ function makeRaw(overrides = {}) {
     createdAt: NOW - 60_000,
     likes: 2,
     likedByMe: false,
+    bookmarks: 0,
+    bookmarkedByMe: false,
     editedAt: null,
     ...overrides,
   };
@@ -188,6 +190,148 @@ describe("posts store / toggleLike", () => {
     expect(store.posts[0]).toMatchObject(likedBefore);
     expect(store.serviceAvailable).toBe(false);
     expect(store.status).toBe("offline");
+  });
+});
+
+describe("posts store / toggleBookmark", () => {
+  /** 在前端用例里模拟收藏接口，互不依赖后端分支的实现细节 */
+  function createBookmarkClient(api) {
+    const state = new Map(
+      api.repository.list().map((post) => [
+        post.id,
+        { bookmarks: post.bookmarks ?? 0, bookmarkedByMe: post.bookmarkedByMe === true },
+      ])
+    );
+
+    return {
+      ...api.client,
+      async setBookmark(id, bookmarked) {
+        const post = api.repository.get(id);
+        if (!post) {
+          throw new ApiError("动态不存在", { status: 404, code: "POST_NOT_FOUND" });
+        }
+        const current = state.get(id) || { bookmarks: 0, bookmarkedByMe: false };
+        const next = {
+          ...post,
+          bookmarkedByMe: bookmarked,
+          bookmarks: Math.max(0, current.bookmarks + (bookmarked ? 1 : -1)),
+        };
+        state.set(id, { bookmarks: next.bookmarks, bookmarkedByMe: next.bookmarkedByMe });
+        return next;
+      },
+    };
+  }
+
+  async function setupBookmarkable(overrides = {}) {
+    const api = createTestApi({ posts: [makeRaw({ id: "p1", bookmarks: 0, ...overrides })] });
+    setApiClient(createBookmarkClient(api));
+    const store = usePostsStore();
+    await store.init();
+    return { api, store };
+  }
+
+  it("ok：收藏后计数与按钮态同步", async () => {
+    const { store } = await setupBookmarkable();
+
+    const result = await store.toggleBookmark("p1");
+
+    expect(result.status).toBe("ok");
+    expect(result.post).toMatchObject({ bookmarks: 1, bookmarkedByMe: true });
+    expect(store.posts[0]).toMatchObject({ bookmarks: 1, bookmarkedByMe: true });
+  });
+
+  it("ok：再次点击取消收藏，且不影响点赞", async () => {
+    const { store } = await setupBookmarkable({ likes: 2, likedByMe: true });
+    await store.toggleBookmark("p1");
+
+    const result = await store.toggleBookmark("p1");
+
+    expect(result.post).toMatchObject({ bookmarks: 0, bookmarkedByMe: false });
+    expect(result.post).toMatchObject({ likes: 2, likedByMe: true });
+    expect(store.posts[0]).toMatchObject({ bookmarks: 0, bookmarkedByMe: false });
+  });
+
+  it("missing：本地不存在的 id", async () => {
+    const { store } = await setupBookmarkable();
+
+    expect(await store.toggleBookmark("missing")).toEqual({ status: "missing" });
+  });
+
+  it("offline：后端不可用时返回 offline 并保留原状态", async () => {
+    const { store } = await setupBookmarkable();
+    const before = { ...store.posts[0] };
+    setApiClient(createOfflineClient());
+
+    const result = await store.toggleBookmark("p1");
+
+    expect(result).toEqual({ status: "offline" });
+    expect(store.posts[0]).toMatchObject(before);
+    expect(store.serviceAvailable).toBe(false);
+  });
+});
+
+describe("posts store / 筛选视图", () => {
+  async function setupFiltered() {
+    const api = createTestApi();
+    setApiClient(api.client);
+    const store = usePostsStore();
+    await store.init();
+
+    // 筛选视图只依赖 store 内的 Post 字段，直接注入可避免依赖后端播种细节
+    store.posts = [
+      makeRaw({ id: "saved", createdAt: NOW - 1000, bookmarks: 1, bookmarkedByMe: true }),
+      makeRaw({ id: "liked", createdAt: NOW - 2000, likes: 1, likedByMe: true }),
+      makeRaw({ id: "plain", createdAt: NOW - 3000 }),
+    ];
+    return { api, store };
+  }
+
+  it("默认展示全部，计数正确", async () => {
+    const { store } = await setupFiltered();
+
+    expect(store.filter).toBe("all");
+    expect(store.visiblePosts.map((post) => post.id)).toEqual(["saved", "liked", "plain"]);
+    expect(store.filterCounts).toEqual({ all: 3, liked: 1, bookmarked: 1 });
+    expect(store.likedPosts.map((post) => post.id)).toEqual(["liked"]);
+    expect(store.bookmarkedPosts.map((post) => post.id)).toEqual(["saved"]);
+  });
+
+  it("切换到点赞 / 收藏视图只保留对应动态", async () => {
+    const { store } = await setupFiltered();
+
+    store.setFilter("liked");
+    expect(store.visiblePosts.map((post) => post.id)).toEqual(["liked"]);
+
+    store.setFilter("bookmarked");
+    expect(store.visiblePosts.map((post) => post.id)).toEqual(["saved"]);
+
+    store.setFilter("all");
+    expect(store.visiblePosts).toHaveLength(3);
+  });
+
+  it("非法筛选值回退全部", async () => {
+    const { store } = await setupFiltered();
+
+    expect(store.setFilter("nope")).toBe("all");
+    expect(store.filter).toBe("all");
+  });
+
+  it("在收藏视图取消收藏后该动态立即消失", async () => {
+    const { api, store } = await setupFiltered();
+    store.setFilter("bookmarked");
+    const target = store.posts.find((post) => post.id === "saved");
+    setApiClient({
+      ...api.client,
+      async setBookmark() {
+        return { ...target, bookmarks: 0, bookmarkedByMe: false };
+      },
+    });
+
+    await store.toggleBookmark("saved");
+
+    expect(store.visiblePosts).toEqual([]);
+    expect(store.filterCounts.bookmarked).toBe(0);
+    expect(store.filter).toBe("bookmarked");
   });
 });
 

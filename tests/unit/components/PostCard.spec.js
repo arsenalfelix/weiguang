@@ -12,6 +12,8 @@ function makePost(overrides = {}) {
     createdAt: NOW - 30 * 1000,
     likes: 2,
     likedByMe: false,
+    bookmarks: 0,
+    bookmarkedByMe: false,
     editedAt: null,
     ...overrides,
   };
@@ -49,6 +51,33 @@ describe("PostCard / 展示", () => {
     expect(button.attributes("aria-label")).toBe("取消点赞，3 个赞");
   });
 
+  it("渲染收藏数，未收藏时不高亮", () => {
+    const wrapper = mountCard(makePost({ bookmarks: 4 }));
+    const button = wrapper.find(".bookmark-btn");
+
+    expect(wrapper.find(".bookmark-count").text()).toBe("4");
+    expect(button.classes()).not.toContain("is-bookmarked");
+    expect(button.attributes("aria-pressed")).toBe("false");
+    expect(button.attributes("aria-label")).toBe("收藏，4 个收藏");
+  });
+
+  it("已收藏时高亮并更新无障碍属性", () => {
+    const wrapper = mountCard(makePost({ bookmarkedByMe: true, bookmarks: 1 }));
+    const button = wrapper.find(".bookmark-btn");
+
+    expect(button.classes()).toContain("is-bookmarked");
+    expect(button.attributes("aria-pressed")).toBe("true");
+    expect(button.attributes("aria-label")).toBe("取消收藏，1 个收藏");
+  });
+
+  it("旧数据缺少收藏字段时按 0 展示", () => {
+    const legacy = makePost();
+    delete legacy.bookmarks;
+    delete legacy.bookmarkedByMe;
+
+    expect(mountCard(legacy).find(".bookmark-count").text()).toBe("0");
+  });
+
   it("编辑过的动态显示「已编辑」标记", () => {
     const wrapper = mountCard(makePost({ editedAt: NOW - 1000 }));
 
@@ -68,6 +97,15 @@ describe("PostCard / 交互", () => {
     await wrapper.find(".like-btn").trigger("click");
 
     expect(wrapper.emitted("like")?.[0]).toEqual(["p1"]);
+  });
+
+  it("点击收藏抛出 bookmark 事件", async () => {
+    const wrapper = mountCard();
+
+    await wrapper.find(".bookmark-btn").trigger("click");
+
+    expect(wrapper.emitted("bookmark")?.[0]).toEqual(["p1"]);
+    expect(wrapper.emitted("like")).toBeUndefined();
   });
 
   it("点击编辑抛出 edit 事件", async () => {

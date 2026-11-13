@@ -4,6 +4,7 @@
  */
 
 import { defineStore } from "pinia";
+import { POST_FILTERS } from "../constants";
 import { getApiClient } from "../services/api";
 import { normalizeAuthor } from "../utils/text";
 
@@ -33,6 +34,7 @@ export const usePostsStore = defineStore("posts", {
     author: "",
     serviceAvailable: true,
     status: STATUS.idle,
+    filter: "all",
     editingId: null,
     highlightId: null,
     introPlayed: false,
@@ -45,6 +47,27 @@ export const usePostsStore = defineStore("posts", {
     /** 发布框应展示的昵称：空值回退「我」 */
     currentAuthor: (state) => normalizeAuthor(state.author),
     editingPost: (state) => state.posts.find((post) => post.id === state.editingId) || null,
+
+    likedPosts: (state) => state.posts.filter((post) => post.likedByMe === true),
+    bookmarkedPosts: (state) => state.posts.filter((post) => post.bookmarkedByMe === true),
+
+    /** 当前筛选视图下的动态列表 */
+    visiblePosts: (state) => {
+      if (state.filter === "liked") {
+        return state.posts.filter((post) => post.likedByMe === true);
+      }
+      if (state.filter === "bookmarked") {
+        return state.posts.filter((post) => post.bookmarkedByMe === true);
+      }
+      return state.posts;
+    },
+
+    /** 筛选标签上的计数 */
+    filterCounts: (state) => ({
+      all: state.posts.length,
+      liked: state.posts.filter((post) => post.likedByMe === true).length,
+      bookmarked: state.posts.filter((post) => post.bookmarkedByMe === true).length,
+    }),
   },
 
   actions: {
@@ -141,6 +164,36 @@ export const usePostsStore = defineStore("posts", {
         this.markOffline();
         return { status: "offline" };
       }
+    },
+
+    /** 收藏/取消收藏：ok / missing / offline */
+    async toggleBookmark(id) {
+      const target = this.posts.find((post) => post.id === id);
+      if (!target) {
+        return { status: "missing" };
+      }
+
+      try {
+        const post = await getApiClient().setBookmark(id, !target.bookmarkedByMe);
+
+        this.replacePost(post);
+        this.markReady();
+
+        return { status: "ok", post };
+      } catch (error) {
+        if (isMissingError(error)) {
+          this.dropPost(id);
+          return { status: "missing" };
+        }
+        this.markOffline();
+        return { status: "offline" };
+      }
+    },
+
+    /** 切换筛选视图，非法值回退 all */
+    setFilter(value) {
+      this.filter = POST_FILTERS.includes(value) ? value : "all";
+      return this.filter;
     },
 
     /** 保存编辑：saved / unchanged / empty / missing / offline */

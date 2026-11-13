@@ -424,12 +424,56 @@ button {
 
 .btn-publish:focus-visible,
 .like-btn:focus-visible,
+.bookmark-btn:focus-visible,
 .edit-btn:focus-visible,
 .delete-btn:focus-visible,
+.filter-tab:focus-visible,
 .btn-save:focus-visible,
 .btn-cancel:focus-visible {
   outline: 2px solid var(--c-primary);
   outline-offset: 2px;
+}
+
+/* ============ 时间线筛选 ============ */
+.filter-tabs {
+  display: flex;
+  gap: 4px;
+  align-self: flex-start;
+  padding: 4px;
+  border: 1px solid var(--c-line);
+  border-radius: var(--radius-pill);
+  background: var(--c-surface-muted);
+}
+
+.filter-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  font-size: 13px;
+  color: var(--c-text-muted);
+  cursor: pointer;
+  transition: color 0.18s var(--ease), background-color 0.18s var(--ease),
+    box-shadow 0.18s var(--ease);
+}
+
+.filter-tab:hover {
+  color: var(--c-text-strong);
+}
+
+.filter-tab.is-active {
+  color: var(--c-primary);
+  background: var(--c-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.filter-count {
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.72;
 }
 
 /* ============ 分隔提示 ============ */
@@ -566,6 +610,7 @@ button {
 }
 
 .like-btn,
+.bookmark-btn,
 .edit-btn,
 .delete-btn {
   display: inline-flex;
@@ -599,6 +644,24 @@ button {
   transition: fill 0.18s var(--ease);
 }
 
+.bookmark-btn:hover {
+  color: var(--c-primary);
+  background: var(--c-brand-soft-bg);
+}
+
+.bookmark-btn.is-bookmarked {
+  color: var(--c-primary);
+}
+
+.bookmark-btn .bookmark {
+  transition: fill 0.18s var(--ease);
+}
+
+.bookmark-btn.is-bookmarked .bookmark {
+  fill: currentColor;
+  animation: bookmark-pop 0.36s var(--ease);
+}
+
 .edit-btn:hover {
   color: var(--c-primary);
   background: var(--c-brand-soft-bg);
@@ -609,8 +672,21 @@ button {
   background: var(--c-danger-soft-bg);
 }
 
-.like-count {
+.like-count,
+.bookmark-count {
   font-variant-numeric: tabular-nums;
+}
+
+@keyframes bookmark-pop {
+  0% {
+    transform: scale(0.82);
+  }
+  60% {
+    transform: scale(1.14);
+  }
+  100% {
+    transform: scale(1);
+  }
 }
 
 /* ============ 动态编辑态 ============ */

@@ -13,7 +13,7 @@ const props = defineProps({
   now: { type: Number, default: 0 },
 });
 
-const emit = defineEmits(["like", "edit", "save", "cancel", "delete"]);
+const emit = defineEmits(["like", "bookmark", "edit", "save", "cancel", "delete"]);
 
 const draft = ref(props.post.content);
 const editEl = ref(null);
@@ -55,6 +55,10 @@ const articleStyle = computed(() =>
     : undefined
 );
 
+const bookmarkCount = computed(() => {
+  const value = Number(props.post.bookmarks);
+  return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+});
 const avatarInitial = computed(() => getInitial(props.post.author));
 const avatarStyle = computed(() => ({ background: getAvatarGradient(props.post.author) }));
 const relativeTime = computed(() => formatRelativeTime(props.post.createdAt, props.now || Date.now()));
@@ -149,6 +153,20 @@ function remove() {
               <path d="M12 20s-7-4.35-7-9a4 4 0 0 1 7-2.65A4 4 0 0 1 19 11c0 4.65-7 9-7 9Z" />
             </svg>
             <span class="like-count">{{ post.likes }}</span>
+          </button>
+
+          <button
+            class="bookmark-btn"
+            :class="{ 'is-bookmarked': post.bookmarkedByMe }"
+            type="button"
+            :aria-pressed="post.bookmarkedByMe === true"
+            :aria-label="`${post.bookmarkedByMe ? '取消收藏' : '收藏'}，${bookmarkCount} 个收藏`"
+            @click="emit('bookmark', post.id)"
+          >
+            <svg class="bookmark" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M6 4h12a1 1 0 0 1 1 1v15l-7-4.2-7 4.2V5a1 1 0 0 1 1-1Z" />
+            </svg>
+            <span class="bookmark-count">{{ bookmarkCount }}</span>
           </button>
 
           <button class="edit-btn" type="button" aria-label="编辑这条动态" @click="emit('edit', post.id)">
