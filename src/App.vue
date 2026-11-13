@@ -101,6 +101,18 @@ async function handleLike(id) {
   }
 }
 
+async function handleBookmark(id) {
+  const result = await posts.toggleBookmark(id);
+
+  if (result.status === "ok") {
+    ui.showToast(result.post.bookmarkedByMe ? "已收藏" : "已取消收藏");
+    return;
+  }
+  if (result.status === "offline") {
+    ui.showToast(OFFLINE_TOAST);
+  }
+}
+
 function handleEdit(id) {
   posts.startEdit(id);
 }
@@ -171,12 +183,16 @@ function handleAdClick() {
         />
 
         <TimelineSection
-          :posts="posts.posts"
+          :posts="posts.visiblePosts"
+          :filter="posts.filter"
+          :counts="posts.filterCounts"
           :editing-id="posts.editingId"
           :highlight-id="posts.highlightId"
           :intro-played="posts.introPlayed"
           :now="clock"
           @like="handleLike"
+          @bookmark="handleBookmark"
+          @filter="posts.setFilter($event)"
           @edit="handleEdit"
           @save="handleSave"
           @cancel="handleCancel"
