@@ -4,6 +4,9 @@
   /* ========== 常量 ========== */
   var STORAGE_POSTS_KEY = "moment.posts.v1";
   var STORAGE_AUTHOR_KEY = "moment.author.v1";
+  var THEME_KEY = "moment.theme.v1";
+  var THEME_MODES = ["system", "light", "dark"];
+  var THEME_LABELS = { system: "跟随系统", light: "浅色", dark: "深色" };
   var MAX_LENGTH = 280;
   var DEFAULT_AUTHOR = "我";
 
@@ -19,6 +22,16 @@
   var storageStateEl = document.getElementById("storageState");
   var storageStateTextEl = document.getElementById("storageStateText");
   var toastEl = document.getElementById("toast");
+  var themeToggleEl = document.getElementById("themeToggle");
+  var themeColorEl = document.getElementById("themeColor");
+  var hotListEl = document.getElementById("hotList");
+  var readListEl = document.getElementById("readList");
+  var adCtaEl = document.getElementById("adCta");
+  var readDialogEl = document.getElementById("readDialog");
+  var readDialogMetaEl = document.getElementById("readDialogMeta");
+  var readDialogTitleEl = document.getElementById("readDialogTitle");
+  var readDialogBodyEl = document.getElementById("readDialogBody");
+  var readDialogCloseEl = document.getElementById("readDialogClose");
 
   /* ========== 状态 ========== */
   var state = {
@@ -30,6 +43,68 @@
   };
 
   var toastTimer = null;
+  var lastReadTrigger = null;
+
+  /* 侧栏内置演示数据：纯本地，不发起任何网络请求 */
+  var HOT_TOPICS = [
+    { title: "城市夜跑", heat: "128.4 万", tag: "生活" },
+    { title: "秋日书单", heat: "96.2 万", tag: "阅读" },
+    { title: "桌面改造", heat: "74.8 万", tag: "效率" },
+    { title: "一人食", heat: "61.5 万", tag: "美食" },
+    { title: "周末短途", heat: "48.9 万", tag: "旅行" },
+    { title: "深夜电台", heat: "36.1 万", tag: "音乐" }
+  ];
+
+  var READS = [
+    {
+      id: "r1",
+      tag: "随笔",
+      minutes: 3,
+      title: "把一天折好，放进抽屉里",
+      excerpt: "写下三件今天发生的小事，情绪会自己找到落点。",
+      paragraphs: [
+        "不必等到值得纪念的时刻才动笔。通勤路上的一束光、便利店热好的饭团、同事随口的一句玩笑，都可以是一天的注脚。",
+        "把注意力放回具体的事物上，抽象的焦虑就会缩小。写下它们的时候，你不是在总结生活，而是在重新经历它。",
+        "三行就够。写完合上本子，去做下一件事。"
+      ]
+    },
+    {
+      id: "r2",
+      tag: "方法",
+      minutes: 4,
+      title: "先做五分钟，再谈坚持",
+      excerpt: "启动成本越低，越容易把一件小事变成习惯。",
+      paragraphs: [
+        "大部分计划失败在开始之前。把目标缩到五分钟，心理阻力会小很多：读两页书、写三句话、做十个深蹲。",
+        "五分钟之后，你往往愿意继续。真正起作用的不是意志力，而是「已经开始了」这个事实。",
+        "给自己一个低到不可能失败的门槛，比给自己一个宏大的目标更有用。"
+      ]
+    },
+    {
+      id: "r3",
+      tag: "生活",
+      minutes: 5,
+      title: "给房间留一块空白",
+      excerpt: "不是所有角落都要被填满，留白也是设计的一部分。",
+      paragraphs: [
+        "桌面乱，往往不是东西太多，而是没有给「暂时不知道放哪」的物品安排位置。先清出一块空桌面，秩序会自己长出来。",
+        "留白不是浪费空间。它让视线有地方休息，也让新的东西有地方进来。",
+        "今晚可以试着只做一件事：把眼前这一平方米收拾干净。"
+      ]
+    },
+    {
+      id: "r4",
+      tag: "夜读",
+      minutes: 2,
+      title: "深夜的自言自语也值得被记录",
+      excerpt: "那些不打算给任何人看的句子，往往最接近真实。",
+      paragraphs: [
+        "白天的表达总是经过修剪：要考虑场合、对象、语气。到了深夜，这些顾虑会松开一些。",
+        "把当时的念头原样写下来，不加修饰，也不必回头修改。它们不是作品，是坐标。",
+        "过一段时间再翻，你会看见自己是怎么走到今天的。"
+      ]
+    }
+  ];
 
   /* ========== 工具函数 ========== */
   function createId() {
@@ -102,6 +177,65 @@
     storageStateEl.title = available
       ? "数据保存在本地浏览器"
       : "浏览器存储不可用，刷新后内容会丢失";
+  }
+
+  /* ========== 主题 ========== */
+  var systemThemeQuery =
+    typeof window.matchMedia === "function"
+      ? window.matchMedia("(prefers-color-scheme: dark)")
+      : null;
+
+  function normalizeThemeMode(value) {
+    return THEME_MODES.indexOf(value) >= 0 ? value : "system";
+  }
+
+  function resolveTheme(mode) {
+    if (mode === "light" || mode === "dark") {
+      return mode;
+    }
+    return systemThemeQuery && systemThemeQuery.matches ? "dark" : "light";
+  }
+
+  function applyTheme(mode, persist) {
+    var normalized = normalizeThemeMode(mode);
+    var resolved = resolveTheme(normalized);
+    var root = document.documentElement;
+
+    root.setAttribute("data-theme", resolved);
+    root.setAttribute("data-theme-mode", normalized);
+    root.style.colorScheme = resolved;
+
+    if (persist) {
+      safeWrite(THEME_KEY, normalized);
+    }
+
+    if (themeToggleEl) {
+      themeToggleEl.dataset.mode = normalized;
+      themeToggleEl.setAttribute(
+        "aria-label",
+        "切换主题，当前：" + THEME_LABELS[normalized]
+      );
+      themeToggleEl.title = "切换主题（当前：" + THEME_LABELS[normalized] + "）";
+    }
+
+    if (themeColorEl) {
+      themeColorEl.setAttribute("content", resolved === "dark" ? "#0d0f14" : "#f7f8fc");
+    }
+  }
+
+  function cycleTheme() {
+    var current = normalizeThemeMode(
+      document.documentElement.getAttribute("data-theme-mode")
+    );
+    var next = THEME_MODES[(THEME_MODES.indexOf(current) + 1) % THEME_MODES.length];
+    applyTheme(next, true);
+    showToast("主题：" + THEME_LABELS[next]);
+  }
+
+  function handleSystemThemeChange() {
+    if (document.documentElement.getAttribute("data-theme-mode") === "system") {
+      applyTheme("system", false);
+    }
   }
 
   /* ========== 数据层 ========== */
@@ -573,6 +707,184 @@
     });
   }
 
+  /* ========== 侧栏模块 ========== */
+  function renderHotList() {
+    if (!hotListEl) {
+      return;
+    }
+    var fragment = document.createDocumentFragment();
+
+    HOT_TOPICS.forEach(function (item, index) {
+      var li = document.createElement("li");
+      li.className = "hot-item";
+
+      var rank = document.createElement("span");
+      rank.className = "hot-rank" + (index < 3 ? " is-top" : "");
+      rank.textContent = String(index + 1);
+
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "hot-link";
+      btn.dataset.hotTitle = item.title;
+      btn.setAttribute("aria-label", "把话题 #" + item.title + "# 填入发布框");
+
+      var row = document.createElement("span");
+      row.className = "hot-title-row";
+
+      var title = document.createElement("span");
+      title.className = "hot-title";
+      title.textContent = "#" + item.title + "#";
+
+      var tag = document.createElement("span");
+      tag.className = "hot-tag";
+      tag.textContent = item.tag;
+
+      var heat = document.createElement("span");
+      heat.className = "hot-heat";
+      heat.textContent = "热度 " + item.heat;
+
+      row.appendChild(title);
+      row.appendChild(tag);
+      btn.appendChild(row);
+      btn.appendChild(heat);
+
+      li.appendChild(rank);
+      li.appendChild(btn);
+      fragment.appendChild(li);
+    });
+
+    hotListEl.replaceChildren(fragment);
+  }
+
+  function renderReads() {
+    if (!readListEl) {
+      return;
+    }
+    var fragment = document.createDocumentFragment();
+
+    READS.forEach(function (item) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "read-card";
+      btn.dataset.readId = item.id;
+      btn.setAttribute("aria-haspopup", "dialog");
+
+      var tag = document.createElement("span");
+      tag.className = "read-tag";
+      tag.textContent = item.tag;
+
+      var title = document.createElement("span");
+      title.className = "read-title";
+      title.textContent = item.title;
+
+      var excerpt = document.createElement("span");
+      excerpt.className = "read-excerpt";
+      excerpt.textContent = item.excerpt;
+
+      var meta = document.createElement("span");
+      meta.className = "read-meta";
+      meta.textContent = item.minutes + " 分钟阅读";
+
+      btn.appendChild(tag);
+      btn.appendChild(title);
+      btn.appendChild(excerpt);
+      btn.appendChild(meta);
+      fragment.appendChild(btn);
+    });
+
+    readListEl.replaceChildren(fragment);
+  }
+
+  function findRead(id) {
+    return READS.find(function (item) {
+      return item.id === id;
+    });
+  }
+
+  function openReadDialog(id, trigger) {
+    var item = findRead(id);
+    if (!item || !readDialogEl) {
+      return;
+    }
+
+    lastReadTrigger = trigger || document.activeElement;
+    readDialogTitleEl.textContent = item.title;
+    readDialogMetaEl.textContent = item.tag + " · " + item.minutes + " 分钟阅读";
+
+    var fragment = document.createDocumentFragment();
+    item.paragraphs.forEach(function (text) {
+      var p = document.createElement("p");
+      p.textContent = text;
+      fragment.appendChild(p);
+    });
+    readDialogBodyEl.replaceChildren(fragment);
+
+    if (typeof readDialogEl.showModal === "function") {
+      readDialogEl.showModal();
+    } else {
+      readDialogEl.setAttribute("open", "");
+    }
+    document.body.classList.add("is-modal-open");
+  }
+
+  function closeReadDialog() {
+    if (!readDialogEl) {
+      return;
+    }
+    if (readDialogEl.open && typeof readDialogEl.close === "function") {
+      readDialogEl.close();
+    } else {
+      readDialogEl.removeAttribute("open");
+    }
+    // 不依赖 close 事件的派发时机，关闭后立即归位
+    handleReadDialogClose();
+  }
+
+  function handleReadDialogCancel(event) {
+    event.preventDefault();
+    closeReadDialog();
+  }
+
+  function handleReadDialogClose() {
+    document.body.classList.remove("is-modal-open");
+    if (lastReadTrigger && typeof lastReadTrigger.focus === "function") {
+      lastReadTrigger.focus();
+    }
+  }
+
+  function handleHotListClick(event) {
+    var btn = event.target.closest("[data-hot-title]");
+    if (!btn || !hotListEl.contains(btn)) {
+      return;
+    }
+
+    var topic = btn.dataset.hotTitle;
+    var draft = contentInputEl.value.replace(/\s+$/, "");
+    contentInputEl.value = (draft ? draft + " " : "") + "#" + topic + "# ";
+
+    updateCounter();
+    autoGrowField(contentInputEl);
+    contentInputEl.focus();
+    var end = contentInputEl.value.length;
+    contentInputEl.setSelectionRange(end, end);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    showToast("已填入话题，补上你的想法吧");
+  }
+
+  function handleReadListClick(event) {
+    var card = event.target.closest("[data-read-id]");
+    if (!card || !readListEl.contains(card)) {
+      return;
+    }
+    openReadDialog(card.dataset.readId, card);
+  }
+
+  function handleReadDialogClick(event) {
+    if (event.target === readDialogEl) {
+      closeReadDialog();
+    }
+  }
+
   /* ========== 发布 ========== */
   function updateCharCounter(el, length) {
     var remaining = MAX_LENGTH - length;
@@ -824,9 +1136,12 @@
     safeRemove(probeKey);
     setStorageState(probeOk);
 
+    applyTheme(safeRead(THEME_KEY), false);
     updateCounter();
     autoGrowField(contentInputEl);
     applyAvatar(composerAvatarEl, getAuthorName());
+    renderHotList();
+    renderReads();
     renderTimeline();
 
     contentInputEl.addEventListener("input", function () {
@@ -849,6 +1164,41 @@
     timelineEl.addEventListener("click", handleTimelineClick);
     timelineEl.addEventListener("input", handleTimelineInput);
     timelineEl.addEventListener("keydown", handleTimelineKeydown);
+
+    if (themeToggleEl) {
+      themeToggleEl.addEventListener("click", cycleTheme);
+    }
+
+    if (hotListEl) {
+      hotListEl.addEventListener("click", handleHotListClick);
+    }
+
+    if (readListEl) {
+      readListEl.addEventListener("click", handleReadListClick);
+    }
+
+    if (adCtaEl) {
+      adCtaEl.addEventListener("click", function () {
+        showToast("这是示例广告位，暂不跳转");
+      });
+    }
+
+    if (readDialogEl) {
+      readDialogEl.addEventListener("click", handleReadDialogClick);
+      readDialogEl.addEventListener("close", handleReadDialogClose);
+      readDialogEl.addEventListener("cancel", handleReadDialogCancel);
+      if (readDialogCloseEl) {
+        readDialogCloseEl.addEventListener("click", closeReadDialog);
+      }
+    }
+
+    if (systemThemeQuery) {
+      if (typeof systemThemeQuery.addEventListener === "function") {
+        systemThemeQuery.addEventListener("change", handleSystemThemeChange);
+      } else if (typeof systemThemeQuery.addListener === "function") {
+        systemThemeQuery.addListener(handleSystemThemeChange);
+      }
+    }
 
     window.setInterval(refreshTimes, 60 * 1000);
 
