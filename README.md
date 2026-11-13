@@ -9,7 +9,8 @@
 - **发布动态**：昵称 + 280 字正文，实时剩余字数，`Ctrl / Cmd + Enter` 快捷发布
 - **时间线**：按发布时间倒序展示，相对时间显示（刚刚 / N 分钟前 / 昨天 / M 月 D 日），每分钟自动刷新
 - **编辑**：卡片内就地修改，`Esc` 取消、`Ctrl / Cmd + Enter` 保存，保存后标记「已编辑」，内容未变则不写入编辑时间
-- **互动**：点赞（可取消）、删除（二次确认）
+- **互动**：点赞（可取消）、收藏（可取消）、删除（二次确认），点赞与收藏互不影响
+- **筛选视图**：时间线顶部切换「全部 / 点赞 / 收藏」，标签实时显示各自数量，空视图有对应引导文案
 - **明暗主题**：浅色 / 深色 / 跟随系统三档切换，选择会被记住，刷新首屏不闪烁
 - **热搜排行**：侧栏榜单，点击话题会把 `#话题#` 填入发布框并聚焦
 - **推荐阅读**：侧栏卡片，点击打开站内弹层查看全文，支持遮罩与 `Esc` 关闭，关闭后焦点回到触发卡片
@@ -60,6 +61,8 @@ npm start        # 独立运行 Hono 服务（默认 8787，NODE_ENV=production 
 | DELETE | `/api/posts/:id` | 删除，`204` |
 | PUT | `/api/posts/:id/likes` | 点赞（幂等） |
 | DELETE | `/api/posts/:id/likes` | 取消点赞（幂等） |
+| PUT | `/api/posts/:id/bookmarks` | 收藏（幂等） |
+| DELETE | `/api/posts/:id/bookmarks` | 取消收藏（幂等） |
 | GET | `/api/profile` | 读取昵称 |
 | PUT | `/api/profile` | 更新昵称 |
 
@@ -84,13 +87,13 @@ tests/
 ├── unit/
 │   ├── text.spec.js            # 截断、首字、哈希
 │   ├── time.spec.js            # 相对 / 绝对时间、时间戳归一化
-│   ├── post-domain.spec.js     # 动态规范化、创建、点赞、编辑
+│   ├── post-domain.spec.js     # 动态规范化、创建、点赞、收藏、编辑
 │   ├── storage.spec.js         # 主题偏好的存储适配器与降级
 │   ├── services/api.spec.js    # HTTP 客户端：请求构造、解包、ApiError 映射
 │   ├── stores/                 # posts / theme / ui 三个 store
 │   └── components/             # TopBar、Composer、PostCard、Timeline、SidePanel、ReadDialog、Toast
 ├── server/
-│   ├── repository.spec.js      # 内存仓储：排序、副本隔离、编辑/点赞幂等、播种
+│   ├── repository.spec.js      # 内存仓储：排序、副本隔离、编辑/点赞/收藏幂等、播种
 │   ├── posts.api.spec.js       # REST 契约：状态码、错误码、CORS、异常兜底
 │   └── testApi.spec.js         # 前端 client ↔ Hono app 的桥接
 └── integration/

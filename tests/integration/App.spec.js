@@ -4,7 +4,7 @@ import { createPinia, setActivePinia } from "pinia";
 import { nextTick } from "vue";
 import App from "../../src/App.vue";
 import { getStorageAdapter } from "../../src/services/storage";
-import { createApiClient, setApiClient } from "../../src/services/api";
+import { ApiError, createApiClient, setApiClient } from "../../src/services/api";
 import { createTestApi } from "../helpers/testApi";
 
 const THEME_KEY = "moment.theme.v1";
@@ -139,6 +139,134 @@ describe("App / 互动流程", () => {
     expect(app.find(".post-content").text()).toBe("保持原样");
     expect(app.find(".post-edited").exists()).toBe(false);
     expect(api.repository.list()[0].content).toBe("保持原样");
+  });
+});
+
+describe("App / 收藏与筛选", () => {
+  it("收藏、取消收藏与后端保持一致并给出提示", async () => {
+    const api = createTestApi();
+    setApiClient(api.client);
+    const app = await mountApp();
+
+    await app.find(".composer-input").setValue("值得收藏的动态");
+    await app.find(".btn-publish").trigger("click");
+    await flushPromises();
+    await nextTick();
+
+    const postId = api.repository.list()[0].id;
+
+    await app.find(".bookmark-btn").trigger("click");
+    await flushPromises();
+    await nextTick();
+
+    expect(app.find(".bookmark-count").text()).toBe("1");
+    expect(app.find(".bookmark-btn").classes()).toContain("is-bookmarked");
+    expect(app.find(".bookmark-btn").attributes("aria-pressed")).toBe("true");
+    expect(app.find(".toast").text()).toBe("已收藏");
+    expect(api.repository.get(postId)).toMatchObject({ bookmarks: 1, bookmarkedByMe: true });
+
+    await app.find(".bookmark-btn").trigger("click");
+    await flushPromises();
+    await nextTick();
+
+    expect(app.find(".bookmark-count").text()).toBe("0");
+    expect(app.find(".bookmark-btn").classes()).not.toContain("is-bookmarked");
+    expect(app.find(".toast").text()).toBe("已取消收藏");
+    expect(api.repository.get(postId)).toMatchObject({ bookmarks: 0, bookmarkedByMe: false });
+  });
+
+  it("点赞与收藏互不影响，筛选标签按状态过滤", async () => {
+    const api = createTestApi();
+    setApiClient(api.client);
+    const app = await mountApp();
+
+    for (const content of ["被点赞的", "被收藏的"]) {
+      await app.find(".composer-input").setValue(content);
+      await app.find(".btn-publish").trigger("click");
+      await flushPromises();
+      await nextTick();
+    }
+
+    const cards = app.findAll(".post");
+    expect(cards).toHaveLength(2);
+
+    // 最新一条（被收藏的）收藏，另一条点赞
+    await cards[0].find(".bookmark-btn").trigger("click");
+    await flushPromises();
+    await nextTick();
+    await cards[1].find(".like-btn").trigger("click");
+    await flushPromises();
+    await nextTick();
+
+    expect(api.repository.list()[0]).toMatchObject({
+      content: "被收藏的",
+      bookmarks: 1,
+      bookmarkedByMe: true,
+      likes: 0,
+      likedByMe: false,
+    });
+    expect(api.repository.list()[1]).toMatchObject({
+      content: "被点赞的",
+      likes: 1,
+      likedByMe: true,
+      bookmarks: 0,
+      bookmarkedByMe: false,
+    });
+
+    const tabs = app.findAll(".filter-tab");
+    expect(tabs.map((tab) => tab.find(".filter-count").text())).toEqual(["2", "1", "1"]);
+
+    await app.find('[data-filter="liked"]').trigger("click");
+    await nextTick();
+    expect(app.findAll(".post")).toHaveLength(1);
+    expect(app.find(".post-content").text()).toBe("被点赞的");
+    expect(app.find(".section-divider span").text()).toBe("我的点赞");
+
+    await app.find('[data-filter="bookmarked"]').trigger("click");
+    await nextTick();
+    expect(app.findAll(".post")).toHaveLength(1);
+    expect(app.find(".post-content").text()).toBe("被收藏的");
+    expect(app.find(".section-divider span").text()).toBe("我的收藏");
+
+    await app.find('[data-filter="all"]').trigger("click");
+    await nextTick();
+    expect(app.findAll(".post")).toHaveLength(2);
+  });
+
+  it("收藏视图为空时展示对应空状态文案", async () => {
+    setApiClient(createTestApi().client);
+    const app = await mountApp();
+
+    await app.find('[data-filter="bookmarked"]').trigger("click");
+    await nextTick();
+
+    expect(app.findAll(".post")).toHaveLength(0);
+    expect(app.find(".empty-title").text()).toBe("还没有收藏的动态");
+    expect(app.find(".empty-desc").text()).toContain("收藏");
+  });
+
+  it("收藏失败时提示服务未连接，不改变按钮状态", async () => {
+    const api = createTestApi({ posts: [{ id: "p1", content: "离线收藏", createdAt: Date.now() }] });
+    let online = true;
+    setApiClient({
+      ...api.client,
+      async setBookmark(id, bookmarked) {
+        if (!online) {
+          throw new ApiError("服务异常", { status: 500, code: "HTTP_ERROR" });
+        }
+        return api.client.setBookmark(id, bookmarked);
+      },
+    });
+    const app = await mountApp();
+
+    online = false;
+    await app.find(".bookmark-btn").trigger("click");
+    await flushPromises();
+    await nextTick();
+
+    expect(app.find(".toast").text()).toBe("服务未连接，请稍后再试");
+    expect(app.find(".bookmark-btn").classes()).not.toContain("is-bookmarked");
+    expect(app.find(".bookmark-count").text()).toBe("0");
   });
 });
 
