@@ -28,23 +28,24 @@ describe("TopBar", () => {
     expect(wrapper.find(".theme-toggle").attributes("aria-label")).toContain("浅色");
   });
 
-  it("存储可用时展示「本地存储」", () => {
+  it("服务可用时展示「服务在线」", () => {
     const wrapper = mount(TopBar);
     const posts = usePostsStore();
-    posts.storageAvailable = true;
+    posts.serviceAvailable = true;
 
-    expect(wrapper.find(".storage-state").text()).toContain("本地存储");
+    expect(wrapper.find(".storage-state").text()).toContain("服务在线");
     expect(wrapper.find(".storage-state").classes()).not.toContain("is-offline");
+    expect(wrapper.find(".storage-state").attributes("title")).toContain("本地 Hono 服务");
   });
 
-  it("存储不可用时展示「仅本次会话」并标记离线", async () => {
+  it("服务不可用时展示「服务离线」并标记离线", async () => {
     const wrapper = mount(TopBar);
     const posts = usePostsStore();
-    posts.storageAvailable = false;
+    posts.serviceAvailable = false;
     await wrapper.vm.$nextTick();
 
-    expect(wrapper.find(".storage-state").text()).toContain("仅本次会话");
+    expect(wrapper.find(".storage-state").text()).toContain("服务离线");
     expect(wrapper.find(".storage-state").classes()).toContain("is-offline");
-    expect(wrapper.find(".storage-state").attributes("title")).toContain("刷新后内容会丢失");
+    expect(wrapper.find(".storage-state").attributes("title")).toContain("无法连接后端服务");
   });
 });

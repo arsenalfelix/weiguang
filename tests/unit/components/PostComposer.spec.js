@@ -63,12 +63,19 @@ describe("PostComposer / 发布", () => {
     expect(wrapper.emitted("publish")?.[0]).toEqual([{ content: "内容", author: "小光" }]);
   });
 
-  it("发布后清空输入框并复位计数", async () => {
+  it("发布时保留草稿，由父级确认成功后再清空", async () => {
     const wrapper = mountComposer();
     const input = wrapper.find(".composer-input");
     await input.setValue("内容");
 
     await wrapper.find(".btn-publish").trigger("click");
+
+    // 发布是异步的：失败（如服务离线）时不能让用户丢掉已写好的内容
+    expect(input.element.value).toBe("内容");
+    expect(wrapper.emitted("publish")).toHaveLength(1);
+
+    wrapper.vm.clear();
+    await wrapper.vm.$nextTick();
 
     expect(input.element.value).toBe("");
     expect(wrapper.find(".char-counter").text()).toBe("280");

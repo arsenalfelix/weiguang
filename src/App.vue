@@ -25,12 +25,12 @@ let highlightTimer = null;
 let introTimer = null;
 let lastReadTrigger = null;
 
-onMounted(() => {
-  posts.init();
+onMounted(async () => {
   theme.init();
 
-  if (!posts.storageAvailable) {
-    ui.showToast("浏览器存储不可用，内容仅保留在本次会话");
+  const ok = await posts.init();
+  if (!ok) {
+    ui.showToast("服务未连接，内容暂不可用");
   }
 
   // 每分钟刷新一次相对时间显示
@@ -76,28 +76,44 @@ watch(
   }
 );
 
-function handlePublish({ content, author }) {
-  const post = posts.addPost({ content, author });
-  if (!post) {
+const OFFLINE_TOAST = "服务未连接，请稍后再试";
+
+async function handlePublish({ content, author }) {
+  const result = await posts.addPost({ content, author });
+
+  if (result.status === "created") {
+    // 只有服务端确认写入后才清空草稿，离线时保留用户已输入的内容
+    composer.value?.clear();
+    return;
+  }
+
+  if (result.status === "invalid") {
     ui.showToast("写点什么再发布吧");
+  } else if (result.status === "offline") {
+    ui.showToast(OFFLINE_TOAST);
   }
 }
 
-function handleLike(id) {
-  posts.toggleLike(id);
+async function handleLike(id) {
+  const result = await posts.toggleLike(id);
+  if (result.status === "offline") {
+    ui.showToast(OFFLINE_TOAST);
+  }
 }
 
 function handleEdit(id) {
   posts.startEdit(id);
 }
 
-function handleSave({ id, content }) {
-  const result = posts.saveEdit(id, content);
+async function handleSave({ id, content }) {
+  const result = await posts.saveEdit(id, content);
 
-  if (result === "saved") {
+  if (result.status === "saved") {
     ui.showToast("已更新");
-  } else if (result === "empty") {
+  } else if (result.status === "empty") {
     ui.showToast("写点什么再保存吧");
+  } else if (result.status === "offline") {
+    ui.showToast(OFFLINE_TOAST);
   }
 }
 
@@ -105,9 +121,13 @@ function handleCancel() {
   posts.cancelEdit();
 }
 
-function handleDelete(id) {
-  if (posts.removePost(id)) {
+async function handleDelete(id) {
+  const result = await posts.removePost(id);
+
+  if (result.status === "deleted") {
     ui.showToast("已删除");
+  } else if (result.status === "offline") {
+    ui.showToast(OFFLINE_TOAST);
   }
 }
 
@@ -172,7 +192,7 @@ function handleAdClick() {
     </div>
 
     <footer class="page-footer">
-      <p>数据仅保存在本机浏览器 · 清除浏览器数据会一并清空</p>
+      <p>数据由本机 Hono 服务内存保存 · 重启服务会清空</p>
     </footer>
   </main>
 

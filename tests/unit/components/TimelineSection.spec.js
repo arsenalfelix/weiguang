@@ -24,6 +24,7 @@ describe("TimelineSection", () => {
     expect(wrapper.find(".post-total").text()).toBe("0 条");
     expect(wrapper.find(".empty-state").exists()).toBe(true);
     expect(wrapper.find(".empty-title").text()).toBe("还没有任何动态");
+    expect(wrapper.find(".empty-desc").text()).toContain("Hono 服务");
     expect(wrapper.find(".timeline").attributes("hidden")).toBeDefined();
   });
 

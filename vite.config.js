@@ -1,8 +1,34 @@
 import { defineConfig } from "vite";
 import vue from "@vitejs/plugin-vue";
+import { getRequestListener } from "@hono/node-server";
+import { createApp } from "./server/app.js";
 
-// 纯静态 SPA：产物使用相对路径，便于任意静态服务器或本地文件方式托管
+/**
+ * 把 Hono 应用挂到 Vite 的 dev / preview 中间件上，
+ * 让前端与 /api 共享同一端口，避免额外的跨域与并发启动脚本。
+ */
+function honoApiPlugin() {
+  const listener = getRequestListener(createApp().fetch);
+
+  const mount = (server) => {
+    server.middlewares.use((req, res, next) => {
+      const url = req.url || "";
+      if (!url.startsWith("/api")) {
+        next();
+        return;
+      }
+      listener(req, res);
+    });
+  };
+
+  return {
+    name: "moment-hono-api",
+    configureServer: mount,
+    configurePreviewServer: mount,
+  };
+}
+
 export default defineConfig({
   base: "./",
-  plugins: [vue()],
+  plugins: [vue(), honoApiPlugin()],
 });

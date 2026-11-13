@@ -10,10 +10,10 @@ const posts = usePostsStore();
 const ui = useUiStore();
 
 const themeTitle = computed(() => `切换主题（当前：${THEME_LABELS[theme.mode]}）`);
-const storageTitle = computed(() =>
-  posts.storageAvailable
-    ? "数据保存在本地浏览器"
-    : "浏览器存储不可用，刷新后内容会丢失"
+const serviceTitle = computed(() =>
+  posts.serviceAvailable
+    ? "数据由本地 Hono 服务提供"
+    : "无法连接后端服务，刷新后重试"
 );
 
 function toggleTheme() {
@@ -67,11 +67,11 @@ onMounted(() => {
 
         <div
           class="storage-state"
-          :class="{ 'is-offline': !posts.storageAvailable }"
-          :title="storageTitle"
+          :class="{ 'is-offline': !posts.serviceAvailable }"
+          :title="serviceTitle"
         >
           <span class="dot" aria-hidden="true"></span>
-          <span>{{ posts.storageAvailable ? "本地存储" : "仅本次会话" }}</span>
+          <span>{{ posts.serviceAvailable ? "服务在线" : "服务离线" }}</span>
         </div>
       </div>
     </div>

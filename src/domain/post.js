@@ -1,8 +1,9 @@
 /** 动态领域模型：字段规范化、创建、点赞与编辑 */
 
-import { DEFAULT_AUTHOR, MAX_AUTHOR_LENGTH, MAX_LENGTH } from "../constants";
-import { normalizeAuthor, truncate } from "../utils/text";
-import { normalizeTimestamp } from "../utils/time";
+// 带扩展名：该模块同时被 Node 侧的 Hono 服务导入，原生 ESM 不做扩展名推断
+import { DEFAULT_AUTHOR, MAX_AUTHOR_LENGTH, MAX_LENGTH } from "../constants.js";
+import { normalizeAuthor, truncate } from "../utils/text.js";
+import { normalizeTimestamp } from "../utils/time.js";
 
 /** 生成唯一 id：优先使用 Web Crypto，降级为时间戳 + 随机串 */
 export function createId() {

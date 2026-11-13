@@ -4,9 +4,8 @@ export const MAX_LENGTH = 280;
 export const MAX_AUTHOR_LENGTH = 12;
 export const DEFAULT_AUTHOR = "我";
 
+/** 动态与昵称已迁移到后端服务，本地只保留设备级 UI 偏好 */
 export const STORAGE_KEYS = {
-  posts: "moment.posts.v1",
-  author: "moment.author.v1",
   theme: "moment.theme.v1",
   probe: "moment.probe",
 };

@@ -50,7 +50,7 @@ const isIntro = computed(() => !props.introPlayed && hasPosts.value);
         </svg>
       </div>
       <h3 class="empty-title">还没有任何动态</h3>
-      <p class="empty-desc">写下第一条吧，它会安安静静地留在这台设备里。</p>
+      <p class="empty-desc">写下第一条吧，它会留在本机的 Hono 服务里。</p>
     </div>
   </div>
 </template>

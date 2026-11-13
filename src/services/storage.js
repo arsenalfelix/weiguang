@@ -1,4 +1,7 @@
-/** 存储服务：把 Web Storage 包装成可替换的适配器，任何异常都不外抛 */
+/**
+ * 存储服务：把 Web Storage 包装成可替换的适配器，任何异常都不外抛。
+ * 业务数据已迁移到 Hono 服务，这里只承载设备级 UI 偏好（主题）。
+ */
 
 /**
  * 基于 Web Storage（localStorage / sessionStorage）的适配器。
@@ -82,23 +85,4 @@ export function remove(key) {
 /** 探测存储是否真正可写（隐私模式下可能抛错） */
 export function probe() {
   return adapter.probe();
-}
-
-/** 读取 JSON；解析失败时清理脏数据并返回 fallback */
-export function readJSON(key, fallback = null) {
-  const raw = read(key);
-  if (!raw) {
-    return fallback;
-  }
-  try {
-    return JSON.parse(raw);
-  } catch (error) {
-    remove(key);
-    return fallback;
-  }
-}
-
-/** 写入 JSON，返回是否成功 */
-export function writeJSON(key, value) {
-  return write(key, JSON.stringify(value));
 }

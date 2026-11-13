@@ -50,7 +50,10 @@ function publish() {
     content: truncate(content.value.trim(), props.maxLength),
     author: authorDraft.value.trim(),
   });
+}
 
+/** 发布成功后由父级调用：清空草稿并聚焦，失败时草稿保留 */
+function clear() {
   content.value = "";
   nextTick(() => {
     contentEl.value?.focus();
@@ -77,7 +80,7 @@ function fillTopic(topic) {
   });
 }
 
-defineExpose({ fillTopic });
+defineExpose({ fillTopic, clear });
 </script>
 
 <template>

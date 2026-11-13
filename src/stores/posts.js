@@ -1,16 +1,38 @@
-/** 动态 store：时间线数据、作者昵称、编辑态与本地持久化 */
+/**
+ * 动态 store：时间线数据来自本机 Hono REST 服务，任何请求失败都降级为 offline，
+ * 不把异常抛给组件。返回值字符串是 UI 依赖的契约，禁止改动。
+ */
 
 import { defineStore } from "pinia";
-import { STORAGE_KEYS } from "../constants";
-import { applyPostEdit, createPost, normalizePost, togglePostLike } from "../domain/post";
-import { readJSON, write, writeJSON, read, probe } from "../services/storage";
+import { getApiClient } from "../services/api";
 import { normalizeAuthor } from "../utils/text";
+
+const STATUS = {
+  idle: "idle",
+  loading: "loading",
+  ready: "ready",
+  offline: "offline",
+};
+
+function trimmed(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+/** 404 说明服务在线但数据已不存在：按 missing 处理，不标记离线 */
+function isMissingError(error) {
+  return Boolean(error) && error.status === 404;
+}
+
+function byCreatedAtDesc(a, b) {
+  return b.createdAt - a.createdAt;
+}
 
 export const usePostsStore = defineStore("posts", {
   state: () => ({
     posts: [],
     author: "",
-    storageAvailable: true,
+    serviceAvailable: true,
+    status: STATUS.idle,
     editingId: null,
     highlightId: null,
     introPlayed: false,
@@ -26,80 +48,188 @@ export const usePostsStore = defineStore("posts", {
   },
 
   actions: {
-    /** 从 localStorage 载入：过滤脏数据、按时间倒序、探测存储可用性 */
-    init() {
-      if (this.initialized) {
-        return;
-      }
-
-      this.storageAvailable = probe();
-
-      const stored = readJSON(STORAGE_KEYS.posts, []);
-      const list = Array.isArray(stored) ? stored : [];
-      this.posts = list
-        .map((item) => normalizePost(item))
-        .filter(Boolean)
-        .sort((a, b) => b.createdAt - a.createdAt);
-
-      const savedAuthor = read(STORAGE_KEYS.author);
-      this.author = savedAuthor && savedAuthor.trim() ? normalizeAuthor(savedAuthor) : "";
-      this.initialized = true;
+    /** 标记服务不可用：任何请求层失败都走这里 */
+    markOffline() {
+      this.serviceAvailable = false;
+      this.status = STATUS.offline;
+    },
+    markReady() {
+      this.serviceAvailable = true;
+      this.status = STATUS.ready;
     },
 
-    /** 持久化动态列表；失败时标记降级 */
-    persist() {
-      const ok = writeJSON(STORAGE_KEYS.posts, this.posts);
-      if (!ok) {
-        this.storageAvailable = false;
+    /** 用服务端返回的最新数据替换列表项 */
+    replacePost(post) {
+      if (!post || typeof post.id !== "string") {
+        return null;
       }
-      return ok;
+      this.posts = this.posts.map((item) => (item.id === post.id ? post : item));
+      return post;
     },
 
-    setAuthor(name) {
+    /** 从列表中移除已不存在于服务端的动态 */
+    dropPost(id) {
+      this.posts = this.posts.filter((post) => post.id !== id);
+      if (this.editingId === id) {
+        this.editingId = null;
+      }
+    },
+
+    /** 从服务端加载动态与昵称；成功 true，失败 false */
+    async init() {
+      this.status = STATUS.loading;
+
+      try {
+        const client = getApiClient();
+        const [list, author] = await Promise.all([client.listPosts(), client.getProfile()]);
+
+        this.posts = (Array.isArray(list) ? list : []).slice().sort(byCreatedAtDesc);
+        this.author = typeof author === "string" ? author : "";
+        this.markReady();
+        return true;
+      } catch (error) {
+        this.posts = [];
+        this.markOffline();
+        return false;
+      } finally {
+        this.initialized = true;
+      }
+    },
+
+    /** 发布：created / invalid / offline */
+    async addPost({ content, author } = {}) {
+      const text = trimmed(content);
+      if (!text) {
+        return { status: "invalid" };
+      }
+
+      try {
+        const post = await getApiClient().createPost({ content: text, author: trimmed(author) });
+
+        this.posts.unshift(post);
+        this.author = post.author;
+        this.editingId = null;
+        this.highlightId = post.id;
+        this.markReady();
+
+        return { status: "created", post };
+      } catch (error) {
+        this.markOffline();
+        return { status: "offline" };
+      }
+    },
+
+    /** 点赞/取消：ok / missing / offline */
+    async toggleLike(id) {
+      const target = this.posts.find((post) => post.id === id);
+      if (!target) {
+        return { status: "missing" };
+      }
+
+      try {
+        const post = await getApiClient().setLike(id, !target.likedByMe);
+
+        this.replacePost(post);
+        this.markReady();
+
+        return { status: "ok", post };
+      } catch (error) {
+        if (isMissingError(error)) {
+          this.dropPost(id);
+          return { status: "missing" };
+        }
+        this.markOffline();
+        return { status: "offline" };
+      }
+    },
+
+    /** 保存编辑：saved / unchanged / empty / missing / offline */
+    async saveEdit(id, content) {
+      const target = this.posts.find((post) => post.id === id);
+      if (!target) {
+        return { status: "missing" };
+      }
+
+      const text = trimmed(content);
+      if (!text) {
+        return { status: "empty" };
+      }
+
+      try {
+        const { post, changed } = await getApiClient().updatePost(id, text);
+        this.markReady();
+
+        if (!changed) {
+          this.editingId = null;
+          return { status: "unchanged", post: post || target };
+        }
+
+        this.replacePost(post);
+        this.editingId = null;
+        this.highlightId = id;
+
+        return { status: "saved", post };
+      } catch (error) {
+        if (isMissingError(error)) {
+          this.dropPost(id);
+          return { status: "missing" };
+        }
+        this.markOffline();
+        return { status: "offline" };
+      }
+    },
+
+    /** 删除：deleted / missing / offline */
+    async removePost(id) {
+      const exists = this.posts.some((post) => post.id === id);
+      if (!exists) {
+        return { status: "missing" };
+      }
+
+      try {
+        await getApiClient().deletePost(id);
+
+        this.dropPost(id);
+        this.markReady();
+
+        return { status: "deleted" };
+      } catch (error) {
+        if (isMissingError(error)) {
+          this.dropPost(id);
+          return { status: "missing" };
+        }
+        this.markOffline();
+        return { status: "offline" };
+      }
+    },
+
+    /** 更新昵称：本地立即生效，服务端失败可忽略 → string */
+    async setAuthor(name) {
       this.author = normalizeAuthor(name);
-      write(STORAGE_KEYS.author, this.author);
+
+      try {
+        const saved = await getApiClient().setProfile(this.author);
+        if (typeof saved === "string" && saved) {
+          this.author = saved;
+        }
+        this.serviceAvailable = true;
+        if (this.status === STATUS.offline) {
+          this.status = STATUS.ready;
+        }
+      } catch (error) {
+        /* 忽略：昵称至少已在本地生效，不打断发布流程 */
+      }
+
       return this.author;
     },
 
-    /** 发布框里实时编辑昵称：允许暂时为空，发布时才落盘 */
+    /** 发布框里实时编辑昵称：允许暂时为空，仅本地草稿 */
     updateAuthorDraft(name) {
       this.author = typeof name === "string" ? name : "";
       return this.author;
     },
 
-    /** 发布动态；内容为空返回 null */
-    addPost(input, { now = Date.now(), generateId } = {}) {
-      const post = createPost(input, { now, generateId });
-      if (!post) {
-        return null;
-      }
-
-      this.posts.unshift(post);
-      this.author = post.author;
-      this.editingId = null;
-      this.highlightId = post.id;
-
-      write(STORAGE_KEYS.author, post.author);
-      this.persist();
-      return post;
-    },
-
-    toggleLike(id) {
-      const target = this.posts.find((post) => post.id === id);
-      if (!target) {
-        return null;
-      }
-
-      const next = togglePostLike(target);
-      this.posts = this.posts.map((post) => (post.id === id ? next : post));
-      this.persist();
-      return next;
-    },
-
-    isEditing(id) {
-      return this.editingId === id;
-    },
-
+    /** 进入编辑态 */
     startEdit(id) {
       if (!this.posts.some((post) => post.id === id)) {
         return false;
@@ -112,41 +242,8 @@ export const usePostsStore = defineStore("posts", {
       this.editingId = null;
     },
 
-    /** 保存编辑：saved / unchanged / empty / missing */
-    saveEdit(id, content, { now = Date.now() } = {}) {
-      const target = this.posts.find((post) => post.id === id);
-      if (!target) {
-        return "missing";
-      }
-
-      const { post: next, changed } = applyPostEdit(target, content, now);
-      if (!next) {
-        return "empty";
-      }
-      if (!changed) {
-        this.editingId = null;
-        return "unchanged";
-      }
-
-      this.posts = this.posts.map((post) => (post.id === id ? next : post));
-      this.editingId = null;
-      this.highlightId = id;
-      this.persist();
-      return "saved";
-    },
-
-    removePost(id) {
-      const exists = this.posts.some((post) => post.id === id);
-      if (!exists) {
-        return false;
-      }
-
-      this.posts = this.posts.filter((post) => post.id !== id);
-      if (this.editingId === id) {
-        this.editingId = null;
-      }
-      this.persist();
-      return true;
+    isEditing(id) {
+      return this.editingId === id;
     },
 
     /** 清空高亮标记（动画结束后调用） */
