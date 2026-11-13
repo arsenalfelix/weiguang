@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>微光 · Moment</title>
+  <meta name="description" content="一个安静的个人动态广场，所有内容只保存在本地浏览器。" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="glow glow-a" aria-hidden="true"></div>
+  <div class="glow glow-b" aria-hidden="true"></div>
+
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">M</div>
+        <div class="brand-text">
+          <h1 class="brand-name">微光</h1>
+          <p class="brand-slogan">记录此刻，安静发光</p>
+        </div>
+      </div>
+      <div class="storage-state" id="storageState" title="数据保存在本地浏览器">
+        <span class="dot" aria-hidden="true"></span>
+        <span id="storageStateText">本地存储</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="page">
+    <section class="composer card" aria-labelledby="composerTitle">
+      <h2 class="visually-hidden" id="composerTitle">发布新动态</h2>
+      <div class="composer-avatar" id="composerAvatar" aria-hidden="true">我</div>
+      <div class="composer-body">
+        <label class="visually-hidden" for="contentInput">动态内容</label>
+        <textarea
+          id="contentInput"
+          class="composer-input"
+          rows="3"
+          maxlength="280"
+          placeholder="此刻在想些什么？"
+          aria-describedby="charCounter"
+        ></textarea>
+
+        <div class="composer-toolbar">
+          <label class="nickname-field" for="authorInput">
+            <span class="nickname-label">昵称</span>
+            <input
+              id="authorInput"
+              class="nickname-input"
+              type="text"
+              maxlength="12"
+              placeholder="我"
+              autocomplete="off"
+              aria-label="昵称"
+            />
+          </label>
+
+          <span class="char-counter" id="charCounter">280</span>
+
+          <button class="btn-publish" id="publishBtn" type="button" disabled>
+            <span>发布</span>
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M5 12h13" />
+              <path d="M12 5l7 7-7 7" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <div class="section-divider">
+      <span>时间线</span>
+      <span class="divider-line" aria-hidden="true"></span>
+      <span class="post-total" id="postTotal">0 条</span>
+    </div>
+
+    <section class="timeline" id="timeline" tabindex="-1" aria-label="动态时间线"></section>
+
+    <div class="empty-state" id="emptyState" hidden>
+      <div class="empty-icon" aria-hidden="true">
+        <svg viewBox="0 0 48 48" width="34" height="34" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10 12h28a4 4 0 0 1 4 4v16a4 4 0 0 1-4 4H22l-9 7v-7h-3a4 4 0 0 1-4-4V16a4 4 0 0 1 4-4Z" />
+          <path d="M16 21h16M16 28h10" />
+        </svg>
+      </div>
+      <h3 class="empty-title">还没有任何动态</h3>
+      <p class="empty-desc">写下第一条吧，它会安安静静地留在这台设备里。</p>
+    </div>
+
+    <footer class="page-footer">
+      <p>数据仅保存在本机浏览器 · 清除浏览器数据会一并清空</p>
+    </footer>
+  </main>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
