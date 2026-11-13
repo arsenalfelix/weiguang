@@ -161,6 +161,12 @@ export function createApiClient({ baseUrl = DEFAULT_BASE_URL, fetchImpl } = {}) 
       });
       return data && data.post ? data.post : null;
     },
+    async setBookmark(id, bookmarked) {
+      const data = await request(`/posts/${encodeURIComponent(id)}/bookmarks`, {
+        method: bookmarked ? "PUT" : "DELETE",
+      });
+      return data && data.post ? data.post : null;
+    },
     async getProfile() {
       const data = await request("/profile");
       return data && typeof data.author === "string" ? data.author : "";

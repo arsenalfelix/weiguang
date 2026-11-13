@@ -40,6 +40,11 @@ export function normalizePost(raw, { now = Date.now(), generateId = createId } =
         ? Math.floor(raw.likes)
         : 0,
     likedByMe: raw.likedByMe === true,
+    bookmarks:
+      typeof raw.bookmarks === "number" && Number.isFinite(raw.bookmarks) && raw.bookmarks >= 0
+        ? Math.floor(raw.bookmarks)
+        : 0,
+    bookmarkedByMe: raw.bookmarkedByMe === true,
     editedAt: normalizeTimestamp(raw.editedAt, null, now),
   };
 }
@@ -59,6 +64,8 @@ export function createPost({ content, author } = {}, { now = Date.now(), generat
       createdAt: now,
       likes: 0,
       likedByMe: false,
+      bookmarks: 0,
+      bookmarkedByMe: false,
       editedAt: null,
     },
     { now, generateId }
@@ -72,6 +79,16 @@ export function togglePostLike(post) {
     ...post,
     likedByMe,
     likes: Math.max(0, post.likes + (likedByMe ? 1 : -1)),
+  };
+}
+
+/** 切换收藏状态，返回新对象（不修改入参） */
+export function togglePostBookmark(post) {
+  const bookmarkedByMe = !post.bookmarkedByMe;
+  return {
+    ...post,
+    bookmarkedByMe,
+    bookmarks: Math.max(0, (post.bookmarks || 0) + (bookmarkedByMe ? 1 : -1)),
   };
 }
 

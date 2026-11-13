@@ -45,6 +45,8 @@ const POST = {
   createdAt: 1,
   likes: 0,
   likedByMe: false,
+  bookmarks: 0,
+  bookmarkedByMe: false,
   editedAt: null,
 };
 
@@ -186,6 +188,26 @@ describe("createApiClient 请求构造", () => {
 
     await expect(client.setLike("p-1", false)).resolves.toEqual(POST);
     expect(calls[0].url).toBe("/api/posts/p-1/likes");
+    expect(calls[0].init.method).toBe("DELETE");
+  });
+
+  it("setBookmark(id, true) 使用 PUT /api/posts/:id/bookmarks 并返回 post", async () => {
+    const bookmarked = { ...POST, bookmarkedByMe: true, bookmarks: 1 };
+    const { fetch, calls } = createFakeFetch(() => jsonResponse({ post: bookmarked }));
+    const client = createApiClient({ fetchImpl: fetch });
+
+    await expect(client.setBookmark("p-1", true)).resolves.toEqual(bookmarked);
+    expect(calls[0].url).toBe("/api/posts/p-1/bookmarks");
+    expect(calls[0].init.method).toBe("PUT");
+    expect(calls[0].init.body).toBeUndefined();
+  });
+
+  it("setBookmark(id, false) 使用 DELETE /api/posts/:id/bookmarks 并返回 post", async () => {
+    const { fetch, calls } = createFakeFetch(() => jsonResponse({ post: POST }));
+    const client = createApiClient({ fetchImpl: fetch });
+
+    await expect(client.setBookmark("p-1", false)).resolves.toEqual(POST);
+    expect(calls[0].url).toBe("/api/posts/p-1/bookmarks");
     expect(calls[0].init.method).toBe("DELETE");
   });
 

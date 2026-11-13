@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { normalizePost, createPost } from "../../src/domain/post";
+import {
+  normalizePost,
+  createPost,
+  togglePostBookmark,
+  togglePostLike,
+} from "../../src/domain/post";
 
 const NOW = new Date(2026, 10, 13, 12, 0).getTime();
 
@@ -11,6 +16,8 @@ function raw(overrides = {}) {
     createdAt: NOW - 1000,
     likes: 2,
     likedByMe: true,
+    bookmarks: 1,
+    bookmarkedByMe: true,
     editedAt: null,
     ...overrides,
   };
@@ -34,6 +41,8 @@ describe("normalizePost", () => {
       createdAt: NOW - 1000,
       likes: 2,
       likedByMe: true,
+      bookmarks: 1,
+      bookmarkedByMe: true,
       editedAt: null,
     });
   });
@@ -58,6 +67,20 @@ describe("normalizePost", () => {
   it("likedByMe 仅接受严格的 true", () => {
     expect(normalizePost(raw({ likedByMe: "true" }), { now: NOW }).likedByMe).toBe(false);
     expect(normalizePost(raw({ likedByMe: 1 }), { now: NOW }).likedByMe).toBe(false);
+  });
+
+  it("收藏数取整且不为负，非法值归零", () => {
+    expect(normalizePost(raw({ bookmarks: 4.9 }), { now: NOW }).bookmarks).toBe(4);
+    expect(normalizePost(raw({ bookmarks: -1 }), { now: NOW }).bookmarks).toBe(0);
+    expect(normalizePost(raw({ bookmarks: "3" }), { now: NOW }).bookmarks).toBe(0);
+    expect(normalizePost(raw({ bookmarks: Number.NaN }), { now: NOW }).bookmarks).toBe(0);
+    expect(normalizePost(raw({ bookmarks: undefined }), { now: NOW }).bookmarks).toBe(0);
+  });
+
+  it("bookmarkedByMe 仅接受严格的 true", () => {
+    expect(normalizePost(raw({ bookmarkedByMe: "true" }), { now: NOW }).bookmarkedByMe).toBe(false);
+    expect(normalizePost(raw({ bookmarkedByMe: 1 }), { now: NOW }).bookmarkedByMe).toBe(false);
+    expect(normalizePost(raw({ bookmarkedByMe: false }), { now: NOW }).bookmarkedByMe).toBe(false);
   });
 
   it("非法时间戳回退到当前时间，编辑时间回退为 null", () => {
@@ -86,6 +109,8 @@ describe("createPost", () => {
       createdAt: NOW,
       likes: 0,
       likedByMe: false,
+      bookmarks: 0,
+      bookmarkedByMe: false,
       editedAt: null,
     });
   });
@@ -97,5 +122,35 @@ describe("createPost", () => {
 
     const post = createPost({ content: "内容", author: "" }, { now: NOW, generateId: () => "id" });
     expect(post.author).toBe("我");
+  });
+});
+
+describe("togglePostLike / togglePostBookmark", () => {
+  it("点赞切换计数且不修改入参", () => {
+    const post = raw({ likes: 2, likedByMe: false });
+    const next = togglePostLike(post);
+
+    expect(next).toMatchObject({ likes: 3, likedByMe: true });
+    expect(post).toMatchObject({ likes: 2, likedByMe: false });
+    expect(next).not.toBe(post);
+  });
+
+  it("收藏切换计数且不修改入参", () => {
+    const post = raw({ bookmarks: 2, bookmarkedByMe: false });
+    const next = togglePostBookmark(post);
+
+    expect(next).toMatchObject({ bookmarks: 3, bookmarkedByMe: true });
+    expect(post).toMatchObject({ bookmarks: 2, bookmarkedByMe: false });
+    expect(next).not.toBe(post);
+  });
+
+  it("取消收藏后计数不会变成负数", () => {
+    const post = raw({ bookmarks: 0, bookmarkedByMe: true });
+    expect(togglePostBookmark(post)).toMatchObject({ bookmarks: 0, bookmarkedByMe: false });
+  });
+
+  it("缺少收藏字段的旧数据也能安全切换", () => {
+    const legacy = { id: "old", content: "旧数据", likes: 0, likedByMe: false };
+    expect(togglePostBookmark(legacy)).toMatchObject({ bookmarks: 1, bookmarkedByMe: true });
   });
 });

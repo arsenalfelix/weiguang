@@ -10,6 +10,8 @@ const SEEDED_POST = {
   createdAt: 1_700_000_000_000,
   likes: 2,
   likedByMe: false,
+  bookmarks: 3,
+  bookmarkedByMe: true,
   editedAt: null,
 };
 
@@ -27,6 +29,18 @@ describe("createTestApi", () => {
 
     expect(await client.listPosts()).toEqual([SEEDED_POST]);
     expect(await client.getProfile()).toBe("旧友");
+  });
+
+  it("client.setBookmark 经由 Hono 落库并被 listPosts 读到", async () => {
+    const { client, repository } = createTestApi({
+      posts: [{ id: "p1", content: "收藏我", createdAt: 1_700_000_000_000 }],
+    });
+
+    const bookmarked = await client.setBookmark("p1", true);
+
+    expect(bookmarked).toMatchObject({ bookmarks: 1, bookmarkedByMe: true });
+    expect(repository.get("p1")).toMatchObject({ bookmarks: 1, bookmarkedByMe: true });
+    expect((await client.listPosts())[0]).toMatchObject({ bookmarks: 1, bookmarkedByMe: true });
   });
 
   it("client 的写操作直接落到同一仓储", async () => {
