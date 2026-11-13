@@ -137,6 +137,22 @@ export function createApp({ repository = createPostRepository() } = {}) {
     return c.json({ post });
   });
 
+  app.put("/api/posts/:id/bookmarks", (c) => {
+    const post = repository.setBookmark(c.req.param("id"), true);
+    if (!post) {
+      return fail(c, 404, ERROR_CODES.postNotFound, MESSAGES.postNotFound);
+    }
+    return c.json({ post });
+  });
+
+  app.delete("/api/posts/:id/bookmarks", (c) => {
+    const post = repository.setBookmark(c.req.param("id"), false);
+    if (!post) {
+      return fail(c, 404, ERROR_CODES.postNotFound, MESSAGES.postNotFound);
+    }
+    return c.json({ post });
+  });
+
   app.get("/api/profile", (c) => c.json({ author: repository.getProfile() }));
 
   app.put("/api/profile", async (c) => {

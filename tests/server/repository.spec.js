@@ -79,6 +79,8 @@ describe("createPostRepository / create", () => {
       createdAt: clock.now(),
       likes: 0,
       likedByMe: false,
+      bookmarks: 0,
+      bookmarkedByMe: false,
       editedAt: null,
     });
   });
@@ -239,6 +241,69 @@ describe("createPostRepository / setLike", () => {
   });
 });
 
+describe("createPostRepository / setBookmark", () => {
+  it("bookmarked=true 返回收藏态", () => {
+    const { repository } = setup();
+    const created = repository.create({ content: "收藏我" });
+    const bookmarked = repository.setBookmark(created.id, true);
+
+    expect(bookmarked.bookmarkedByMe).toBe(true);
+    expect(bookmarked.bookmarks).toBe(1);
+    expect(repository.get(created.id).bookmarks).toBe(1);
+  });
+
+  it("重复收藏幂等", () => {
+    const { repository } = setup();
+    const created = repository.create({ content: "收藏我" });
+    repository.setBookmark(created.id, true);
+    const again = repository.setBookmark(created.id, true);
+
+    expect(again.bookmarks).toBe(1);
+    expect(again.bookmarkedByMe).toBe(true);
+  });
+
+  it("取消收藏并幂等", () => {
+    const { repository } = setup();
+    const created = repository.create({ content: "收藏我" });
+    repository.setBookmark(created.id, true);
+
+    expect(repository.setBookmark(created.id, false).bookmarks).toBe(0);
+    const again = repository.setBookmark(created.id, false);
+    expect(again.bookmarks).toBe(0);
+    expect(again.bookmarkedByMe).toBe(false);
+  });
+
+  it("收藏与点赞互不影响", () => {
+    const { repository } = setup();
+    const created = repository.create({ content: "两种互动" });
+
+    repository.setLike(created.id, true);
+    repository.setBookmark(created.id, true);
+    const post = repository.setLike(created.id, false);
+
+    expect(post).toMatchObject({
+      likes: 0,
+      likedByMe: false,
+      bookmarks: 1,
+      bookmarkedByMe: true,
+    });
+  });
+
+  it("id 不存在时返回 null", () => {
+    const { repository } = setup();
+    expect(repository.setBookmark("missing", true)).toBeNull();
+  });
+
+  it("返回值是副本，外部修改不影响仓储", () => {
+    const { repository } = setup();
+    const created = repository.create({ content: "收藏我" });
+    const bookmarked = repository.setBookmark(created.id, true);
+    bookmarked.bookmarks = 99;
+
+    expect(repository.get(created.id).bookmarks).toBe(1);
+  });
+});
+
 describe("createPostRepository / profile", () => {
   it("未设置时为空字符串", () => {
     const { repository } = setup();
@@ -277,9 +342,28 @@ describe("createPostRepository / seed", () => {
       createdAt: BASE_TIME - 1_000,
       likes: 3,
       likedByMe: true,
+      bookmarks: 0,
+      bookmarkedByMe: false,
       editedAt: null,
     });
     expect(repository.getProfile()).toBe("小明");
+  });
+
+  it("播种收藏字段并保留", () => {
+    const { repository } = setup();
+    repository.seed({
+      posts: [
+        {
+          id: "c",
+          content: "已收藏",
+          createdAt: BASE_TIME,
+          bookmarks: 2,
+          bookmarkedByMe: true,
+        },
+      ],
+    });
+
+    expect(repository.get("c")).toMatchObject({ bookmarks: 2, bookmarkedByMe: true });
   });
 
   it("跳过空内容条目", () => {

@@ -103,6 +103,8 @@ describe("POST /api/posts", () => {
       createdAt: clock.now(),
       likes: 0,
       likedByMe: false,
+      bookmarks: 0,
+      bookmarkedByMe: false,
       editedAt: null,
     });
   });
@@ -331,6 +333,73 @@ describe("PUT / DELETE /api/posts/:id/likes", () => {
     const { app } = setup();
     const put = await call(app, "/api/posts/nope/likes", { method: "PUT" });
     const del = await call(app, "/api/posts/nope/likes", { method: "DELETE" });
+
+    expect(put.status).toBe(404);
+    expect(put.json.error.code).toBe("POST_NOT_FOUND");
+    expect(del.status).toBe(404);
+    expect(del.json.error.code).toBe("POST_NOT_FOUND");
+  });
+});
+
+describe("PUT / DELETE /api/posts/:id/bookmarks", () => {
+  it("PUT 收藏返回 bookmarkedByMe=true 且 bookmarks=1", async () => {
+    const { app } = setup();
+    const created = await call(app, "/api/posts", { method: "POST", body: { content: "收藏" } });
+
+    const res = await call(app, `/api/posts/${created.json.post.id}/bookmarks`, { method: "PUT" });
+
+    expect(res.status).toBe(200);
+    expect(res.json.post.bookmarkedByMe).toBe(true);
+    expect(res.json.post.bookmarks).toBe(1);
+    // 收藏不影响点赞
+    expect(res.json.post).toMatchObject({ likes: 0, likedByMe: false });
+  });
+
+  it("PUT 幂等：重复收藏仍为 1", async () => {
+    const { app } = setup();
+    const created = await call(app, "/api/posts", { method: "POST", body: { content: "收藏" } });
+    const path = `/api/posts/${created.json.post.id}/bookmarks`;
+
+    await call(app, path, { method: "PUT" });
+    const res = await call(app, path, { method: "PUT" });
+
+    expect(res.status).toBe(200);
+    expect(res.json.post.bookmarks).toBe(1);
+    expect(res.json.post.bookmarkedByMe).toBe(true);
+  });
+
+  it("DELETE 取消收藏返回 bookmarkedByMe=false 且幂等", async () => {
+    const { app } = setup();
+    const created = await call(app, "/api/posts", { method: "POST", body: { content: "收藏" } });
+    const path = `/api/posts/${created.json.post.id}/bookmarks`;
+    await call(app, path, { method: "PUT" });
+
+    const once = await call(app, path, { method: "DELETE" });
+    const twice = await call(app, path, { method: "DELETE" });
+
+    expect(once.status).toBe(200);
+    expect(once.json.post.bookmarkedByMe).toBe(false);
+    expect(once.json.post.bookmarks).toBe(0);
+    expect(twice.status).toBe(200);
+    expect(twice.json.post.bookmarks).toBe(0);
+  });
+
+  it("收藏状态会出现在列表与详情中", async () => {
+    const { app } = setup();
+    const created = await call(app, "/api/posts", { method: "POST", body: { content: "收藏" } });
+    await call(app, `/api/posts/${created.json.post.id}/bookmarks`, { method: "PUT" });
+
+    const list = await call(app, "/api/posts");
+    expect(list.json.posts[0]).toMatchObject({ bookmarks: 1, bookmarkedByMe: true });
+
+    const detail = await call(app, `/api/posts/${created.json.post.id}`);
+    expect(detail.json.post).toMatchObject({ bookmarks: 1, bookmarkedByMe: true });
+  });
+
+  it("id 不存在返回 404 POST_NOT_FOUND", async () => {
+    const { app } = setup();
+    const put = await call(app, "/api/posts/nope/bookmarks", { method: "PUT" });
+    const del = await call(app, "/api/posts/nope/bookmarks", { method: "DELETE" });
 
     expect(put.status).toBe(404);
     expect(put.json.error.code).toBe("POST_NOT_FOUND");

@@ -9,6 +9,7 @@ import {
   applyPostEdit,
   createPost,
   normalizePost,
+  togglePostBookmark,
   togglePostLike,
 } from "../src/domain/post.js";
 import { normalizeAuthor } from "../src/utils/text.js";
@@ -22,6 +23,8 @@ function toPlainPost(post) {
     createdAt: post.createdAt,
     likes: post.likes,
     likedByMe: post.likedByMe,
+    bookmarks: post.bookmarks,
+    bookmarkedByMe: post.bookmarkedByMe,
     editedAt: post.editedAt,
   };
 }
@@ -118,6 +121,22 @@ export function createPostRepository({ now = Date.now, generateId } = {}) {
     return toPlainPost(next);
   }
 
+  function setBookmark(id, bookmarked) {
+    const current = posts.get(id);
+    if (!current) {
+      return null;
+    }
+
+    const target = bookmarked === true;
+    if (current.bookmarkedByMe === target) {
+      return toPlainPost(current);
+    }
+
+    const next = togglePostBookmark(current);
+    posts.set(id, next);
+    return toPlainPost(next);
+  }
+
   function getProfile() {
     return profile;
   }
@@ -157,6 +176,7 @@ export function createPostRepository({ now = Date.now, generateId } = {}) {
     update,
     remove,
     setLike,
+    setBookmark,
     getProfile,
     setProfile,
     seed,
